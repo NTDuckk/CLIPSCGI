@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 from PIL import Image
 from tqdm import tqdm
-from transformers import AutoProcessor, LlavaForConditionalGeneration
+from transformers import AutoProcessor, LlavaForConditionalGeneration, BitsAndBytesConfig
 
 
 def truncate_words(text: str, max_words: int = 45) -> str:
@@ -14,16 +14,14 @@ def truncate_words(text: str, max_words: int = 45) -> str:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", required=True, help="Folder chứa ảnh train (sẽ recurse)")
-    ap.add_argument("--out", required=True, help="Output captions.jsonl")
+    ap.add_argument("--data", required=True)
+    ap.add_argument("--out", required=True)
     ap.add_argument("--model", default="llava-hf/llava-1.5-7b-hf")
-    ap.add_argument("--load_4bit", action="store_true", help="Giảm VRAM (cần bitsandbytes)")
+    ap.add_argument("--load_4bit", action="store_true")
     ap.add_argument("--max_new_tokens", type=int, default=128)
     ap.add_argument("--ext", nargs="+", default=[".jpg", ".jpeg", ".png", ".webp"])
     args = ap.parse_args()
 
-    # Instruction theo paper: tập trung thuộc tính người, bỏ qua nền, <=45 words. :contentReference[oaicite:3]{index=3}
-    # (Viết lại tương đương nội dung paper:contentReference[oaicite:4]{index=4}format)
     instruction = (
         "Describe the most obvious person only. Ignore background. "
         "Use at most 45 words and follow this template:\n"
@@ -33,29 +31,39 @@ def main():
         "The [gender] has [hair length] and [wearing glasses or not]."
     )
 
-    print("Loading model:", args.model)
-    dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+    # ---- FIX: dùng BitsAndBytesConfig (ổn định hơn trên nhiều version) ----
+    quant_cfg = None
+    if args.load_4bit:
+        quant_cfg = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True,
+        )
 
     model = LlavaForConditionalGeneration.from_pretrained(
         args.model,
-        torch_dtype=dtype,
         device_map="auto",
-        load_in_4bit=args.load_4bit,
+        torch_dtype=torch.float16,
+        quantization_config=quant_cfg,
         low_cpu_mem_usage=True,
     )
     processor = AutoProcessor.from_pretrained(args.model)
+    # HF docs khuyên left padding khi batch generate
+    processor.tokenizer.padding_side = "left"
+    # ---------------------------------------------------------------
 
     data_root = Path(args.data)
-    image_paths = []
-    for p in data_root.rglob("*"):
-        if p.is_file() and p.suffix.lower() in set([e.lower() for e in args.ext]):
-            image_paths.append(p)
-    image_paths.sort()
-
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Resume nếu file đã tồn tại
+    image_paths = []
+    exts = set([e.lower() for e in args.ext])
+    for p in data_root.rglob("*"):
+        if p.is_file() and p.suffix.lower() in exts:
+            image_paths.append(p)
+    image_paths.sort()
+
     done = set()
     if out_path.exists():
         with out_path.open("r", encoding="utf-8") as f:
@@ -73,11 +81,11 @@ def main():
                 continue
 
             image = Image.open(img_path).convert("RGB")
-
-            # Prompt format theo LLaVA HF: có <image> + "USER: ... ASSISTANT:" :contentReference[oaicite:5]{index=5}
             prompt = f"USER: <image>\n{instruction}\nASSISTANT:"
 
-            inputs = processor(text=prompt, images=image, return_tensors="pt").to(model.device)
+            inputs = processor(text=prompt, images=image, return_tensors="pt")
+            inputs = {k: v.to(model.device) for k, v in inputs.items()}
+
             with torch.inference_mode():
                 output_ids = model.generate(**inputs, max_new_tokens=args.max_new_tokens, do_sample=False)
 
