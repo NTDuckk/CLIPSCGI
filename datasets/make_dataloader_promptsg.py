@@ -24,24 +24,25 @@ __factory = {
     'occ_duke': OCC_DukeMTMCreID,
 }
 
-
 def train_collate_fn(batch):
-    # batch item:
-    #   - PromptSG: (img, pid, camid, viewid, fname)
-    #   - CLIP-SCGI (train): (img, pid, camid, viewid, fname, caption)
     if len(batch[0]) == 6:
         imgs, pids, camids, viewids, _, caps = zip(*batch)
-        pids = torch.tensor(pids, dtype=torch.int64)
-        viewids = torch.tensor(viewids, dtype=torch.int64)
-        camids = torch.tensor(camids, dtype=torch.int64)
-        return torch.stack(imgs, dim=0), pids, camids, viewids, list(caps)
+        caps = [c if c is not None else "" for c in caps]  # <= thêm dòng này
+        return (
+            torch.stack(imgs, dim=0),
+            torch.tensor(pids, dtype=torch.int64),
+            torch.tensor(camids, dtype=torch.int64),
+            torch.tensor(viewids, dtype=torch.int64),
+            list(caps),
+        )
     else:
         imgs, pids, camids, viewids, _ = zip(*batch)
-        pids = torch.tensor(pids, dtype=torch.int64)
-        viewids = torch.tensor(viewids, dtype=torch.int64)
-        camids = torch.tensor(camids, dtype=torch.int64)
-        return torch.stack(imgs, dim=0), pids, camids, viewids
-
+        return (
+            torch.stack(imgs, dim=0),
+            torch.tensor(pids, dtype=torch.int64),
+            torch.tensor(camids, dtype=torch.int64),
+            torch.tensor(viewids, dtype=torch.int64),
+        )
 
 def val_collate_fn(batch):
     imgs, pids, camids, viewids, img_paths = zip(*batch)
@@ -71,27 +72,21 @@ def make_dataloader(cfg):
 
     dataset = __factory[cfg.DATASETS.NAMES](root=cfg.DATASETS.ROOT_DIR)
 
-    # ✅ caption maps (by image filename, fallback by pid/label)
     method = getattr(cfg.MODEL, "METHOD", "promptsg")
+
     caption_by_img, caption_by_pid = None, None
-
     if method == "clip_scgi":
-        cap_path = getattr(cfg.DATASETS, "CAPTION_FILE", "")
-        if not cap_path:
-            raise ValueError("MODEL.METHOD='clip_scgi' nhưng cfg.DATASETS.CAPTION_FILE đang rỗng.")
-        max_words = int(getattr(cfg.DATASETS, "CAPTION_MAX_WORDS", 45))
-        caption_by_img, caption_by_pid = load_caption_maps(cap_path, max_words=max_words)
+        cap_file = getattr(cfg.DATASETS, "CAPTION_FILE", "")
+        caption_by_img, caption_by_pid = load_caption_maps(cap_file)  # (by_img, by_pid)
 
-    # ✅ train_set: có caption khi clip_scgi
     train_set = ImageDataset(
         dataset.train,
         train_transforms,
         caption_by_img=caption_by_img,
-        caption_by_pid=caption_by_pid
+        caption_by_pid=caption_by_pid,
     )
+    train_set_normal = ImageDataset(dataset.train, val_transforms)  # không cần caption
 
-    # bình thường (không cần caption)
-    train_set_normal = ImageDataset(dataset.train, val_transforms)
 
     num_classes = dataset.num_train_pids
     cam_num = dataset.num_train_cams
@@ -132,7 +127,7 @@ def make_dataloader(cfg):
         raise ValueError(f"unsupported sampler! expected softmax or triplet but got {cfg.DATALOADER.SAMPLER}")
 
     # Val/query/gallery: không cần caption
-    val_set = ImageDataset(dataset.query + dataset.gallery, val_transforms, caption_by_img=None, caption_by_pid=None)
+    val_set = ImageDataset(dataset.query + dataset.gallery, val_transforms)
     val_loader = DataLoader(
         val_set,
         batch_size=cfg.TEST.IMS_PER_BATCH,
@@ -141,7 +136,7 @@ def make_dataloader(cfg):
         collate_fn=val_collate_fn,
     )
 
-    query_set = ImageDataset(dataset.query, val_transforms, caption_by_img=None, caption_by_pid=None)
+    query_set = ImageDataset(dataset.query, val_transforms)
     query_loader = DataLoader(
         query_set,
         batch_size=cfg.TEST.IMS_PER_BATCH,
@@ -150,7 +145,7 @@ def make_dataloader(cfg):
         collate_fn=val_collate_fn,
     )
 
-    gallery_set = ImageDataset(dataset.gallery, val_transforms, caption_by_img=None, caption_by_pid=None)
+    gallery_set = ImageDataset(dataset.gallery, val_transforms)
     gallery_loader = DataLoader(
         gallery_set,
         batch_size=cfg.TEST.IMS_PER_BATCH,

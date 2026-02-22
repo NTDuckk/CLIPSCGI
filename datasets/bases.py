@@ -66,27 +66,17 @@ class BaseImageDataset(BaseDataset):
         print("  gallery  | {:5d} | {:8d} | {:9d}".format(num_gallery_pids, num_gallery_imgs, num_gallery_cams))
         print("  ----------------------------------------")
 
-
+# bases.py
 class ImageDataset(Dataset):
-    def __init__(self, dataset, transform=None, caption_by_img=None, caption_by_pid=None):
+    def __init__(self, dataset, transform=None, caption_by_img=None, caption_by_pid=None, caption_dict=None):
         self.dataset = dataset
         self.transform = transform
         self.caption_by_img = caption_by_img
         self.caption_by_pid = caption_by_pid
+        self.caption_dict = caption_dict
 
     def __len__(self):
         return len(self.dataset)
-
-    def _lookup_caption(self, img_path: str) -> str:
-        if not self.caption_dict:
-            return ""
-        # try multiple keys: full path, basename
-        base = img_path.split('/')[-1]
-        if img_path in self.caption_dict:
-            return self.caption_dict[img_path]
-        if base in self.caption_dict:
-            return self.caption_dict[base]
-        return ""
 
     def __getitem__(self, index):
         img_path, pid, camid, trackid = self.dataset[index]
@@ -94,21 +84,24 @@ class ImageDataset(Dataset):
         if self.transform is not None:
             img = self.transform(img)
 
-        img_name = osp.basename(img_path)
+        fname = osp.basename(img_path)
 
-        # Không dùng caption -> giữ output cũ
-        if self.caption_by_img is None and self.caption_by_pid is None:
-            return img, pid, camid, trackid, img_name
+        caption = None
+        # ưu tiên caption_dict nếu có (để tương thích code cũ)
+        if self.caption_dict is not None:
+            caption = self.caption_dict.get(fname) or self.caption_dict.get(img_path)
 
-        # 1) Ưu tiên theo ảnh (SCGI đúng chuẩn)
-        cap = ""
-        if self.caption_by_img is not None:
-            cap = self.caption_by_img.get(img_name, "")
-            if not cap:
-                cap = self.caption_by_img.get(img_path, "")
+        if caption is None and self.caption_by_img is not None:
+            caption = self.caption_by_img.get(fname) or self.caption_by_img.get(img_path)
 
-        # 2) Fallback theo label/pid nếu bạn muốn “tùy theo label”
-        if (not cap) and (self.caption_by_pid is not None):
-            cap = self.caption_by_pid.get(int(pid), "")
+        if caption is None and self.caption_by_pid is not None:
+            caption = self.caption_by_pid.get(pid) or self.caption_by_pid.get(str(pid))
 
-        return img, pid, camid, trackid, img_name, cap
+        has_caption_source = (self.caption_dict is not None) or (self.caption_by_img is not None) or (self.caption_by_pid is not None)
+
+        if has_caption_source:
+            if caption is None:
+                caption = ""   # đảm bảo luôn là str
+            return img, pid, camid, trackid, fname, caption
+        else:
+            return img, pid, camid, trackid, fnam

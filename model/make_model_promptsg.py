@@ -657,6 +657,8 @@ class CLIPSCGIModel(nn.Module):
         # Freeze text encoder weights (but gradients must pass through to s*)
         for p in self.text_encoder.parameters():
             p.requires_grad_(False)
+        for p in self.token_embedding.parameters():
+            p.requires_grad_(False)
         self.text_encoder.eval()
 
         self.drop_cgi_in_infer = getattr(cgi_cfg, "DROP_CGI_IN_INFER", True) if cgi_cfg is not None else True
@@ -712,6 +714,8 @@ class CLIPSCGIModel(nn.Module):
         # Training: need captions to build s*
         cap_feat = None
         if self.use_caption and (caption is not None):
+            if isinstance(caption, (list, tuple)):
+                caption = [c if c is not None else "" for c in caption]
             cap_feat = self._encode_caption(caption, device=device)
 
         # If captions missing, fallback to simplified prompt (still trainable but not CLIP-SCGI)
