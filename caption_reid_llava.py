@@ -20,6 +20,8 @@ def main():
     ap.add_argument("--load_4bit", action="store_true")
     ap.add_argument("--max_new_tokens", type=int, default=128)
     ap.add_argument("--ext", nargs="+", default=[".jpg", ".jpeg", ".png", ".webp"])
+    # NEW: bắt đầu caption từ ảnh sau ảnh này (theo relative path trong folder --data)
+    ap.add_argument("--start_after", default="", help="Start captioning from the image after this filename, e.g. 1162_c3s3_001912_03.jpg")
     args = ap.parse_args()
 
     instruction = (
@@ -49,7 +51,6 @@ def main():
         low_cpu_mem_usage=True,
     )
     processor = AutoProcessor.from_pretrained(args.model)
-    # HF docs khuyên left padding khi batch generate
     processor.tokenizer.padding_side = "left"
     # ---------------------------------------------------------------
 
@@ -63,6 +64,22 @@ def main():
         if p.is_file() and p.suffix.lower() in exts:
             image_paths.append(p)
     image_paths.sort()
+
+    # NEW: cắt danh sách ảnh để bắt đầu từ ảnh sau start_after
+    if args.start_after:
+        # tìm theo rel path (giống key bạn đang lưu trong jsonl)
+        rel_list = [str(p.relative_to(data_root)) for p in image_paths]
+        try:
+            idx = rel_list.index(args.start_after)
+            # bắt đầu từ ảnh sau
+            image_paths = image_paths[idx + 1 :]
+            print(f"[start_after] Found {args.start_after} at index={idx}. Start from next image. Remaining={len(image_paths)}")
+        except ValueError:
+            # không thấy filename => báo rõ và dừng để tránh caption sai đoạn
+            print(f"[start_after] ERROR: Cannot find '{args.start_after}' inside {data_root}")
+            print("Hint: kiểm tra đúng tên file + đúng chữ hoa/thường. Bạn cũng có thể chạy:")
+            print(f"  ls -1 {data_root} | grep '{args.start_after.split('_')[0]}' | head")
+            return
 
     done = set()
     if out_path.exists():
