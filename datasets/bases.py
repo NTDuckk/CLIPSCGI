@@ -104,4 +104,4 @@ class ImageDataset(Dataset):
                 caption = ""   # đảm bảo luôn là str
             return img, pid, camid, trackid, fname, caption
         else:
-            return img, pid, camid, trackid, fnam
+            return img, pid, camid, trackid, fname

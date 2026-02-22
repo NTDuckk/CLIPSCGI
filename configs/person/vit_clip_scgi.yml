@@ -28,7 +28,8 @@ TEST:
   SKIP_MIM_GALLERY: False
   NECK_FEAT: 'after'
   FEAT_NORM: 'yes'
-
+DATALOADER:
+  SAMPLER: 'softmax_triplet'
 SOLVER:
   SEED: 1234
   MARGIN: 0.3
