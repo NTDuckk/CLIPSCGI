@@ -1,62 +1,74 @@
-import json
-import csv
-from pathlib import Path
-from typing import Dict
+import json, os
 
-def load_captions(path: str) -> Dict[str, str]:
-    """Load offline captions mapping.
+def truncate_words(text: str, max_words: int = 45) -> str:
+    if text is None:
+        return ""
+    words = str(text).strip().split()
+    return " ".join(words[:max_words])
 
-    Supported formats:
-      - JSON: either {key: caption, ...} or [{"key":..., "caption":...}, ...]
-      - CSV : columns must include a key column and a caption/text column.
-             Common names: key,image,filename,path ; caption,text,desc
-
-    Keys can be full image paths or basenames. The dataset will try both.
+def load_caption_maps(path: str, max_words: int = 45):
     """
-    if not path:
-        return {}
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"Caption file not found: {path}")
-    suffix = p.suffix.lower()
+    Hỗ trợ:
+    - JSON list: [ {"image_path":..., "caption":...}, ... ]
+    - JSON single record: {"image_path":..., "caption":...}
+    - JSONL: mỗi dòng 1 record như trên
+    Trả về:
+      cap_by_img: dict[str, str]  (key = basename + full image_path)
+      cap_by_pid: dict[int, str]  (fallback, 1 caption/ID)
+    """
+    cap_by_img = {}
+    cap_by_pid = {}
 
-    if suffix in [".json"]:
-        data = json.loads(p.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            return {str(k): str(v) for k, v in data.items()}
+    def add_record(ip: str, cap: str):
+        if not ip:
+            return
+        cap = truncate_words(cap, max_words)
+        cap_by_img[ip] = cap
+        cap_by_img[os.path.basename(ip)] = cap
+
+        # fallback theo pid (label) nếu cần
+        base = os.path.basename(ip)
+        try:
+            pid = int(base.split("_")[0])
+            cap_by_pid.setdefault(pid, cap)  # giữ caption đầu tiên của pid
+        except Exception:
+            pass
+
+    # Try parse as JSON
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if isinstance(data, dict) and ("image_path" in data and "caption" in data):
+            add_record(data.get("image_path"), data.get("caption", ""))
+            return cap_by_img, cap_by_pid
+
         if isinstance(data, list):
-            out = {}
-            for row in data:
-                if not isinstance(row, dict):
-                    continue
-                # guess columns
-                key = row.get("key") or row.get("image") or row.get("path") or row.get("filename") or row.get("img")
-                cap = row.get("caption") or row.get("text") or row.get("desc") or row.get("description")
-                if key is None or cap is None:
-                    continue
-                out[str(key)] = str(cap)
-            return out
-        raise ValueError("Unsupported JSON structure for captions.")
-    elif suffix in [".csv", ".tsv"]:
-        delimiter = "," if suffix == ".csv" else "\t"
-        out = {}
-        with p.open("r", encoding="utf-8") as f:
-            reader = csv.DictReader(f, delimiter=delimiter)
-            # infer columns
-            key_cols = ["key","image","path","filename","img"]
-            cap_cols = ["caption","text","desc","description"]
-            for row in reader:
-                k = None
-                for c in key_cols:
-                    if c in row and row[c]:
-                        k = row[c]; break
-                v = None
-                for c in cap_cols:
-                    if c in row and row[c]:
-                        v = row[c]; break
-                if k is None or v is None:
-                    continue
-                out[str(k)] = str(v)
-        return out
-    else:
-        raise ValueError(f"Unsupported caption file type: {suffix}")
+            for r in data:
+                if isinstance(r, dict):
+                    add_record(r.get("image_path"), r.get("caption", ""))
+            return cap_by_img, cap_by_pid
+
+        # Nếu là dict mapping kiểu {"0002.jpg":"..."} thì cũng handle
+        if isinstance(data, dict):
+            for k, v in data.items():
+                add_record(k, v)
+            return cap_by_img, cap_by_pid
+
+    except Exception:
+        pass
+
+    # Fallback parse as JSONL
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if isinstance(r, dict):
+                add_record(r.get("image_path"), r.get("caption", ""))
+
+    return cap_by_img, cap_by_pid

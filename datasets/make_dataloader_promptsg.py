@@ -8,7 +8,8 @@ from .sampler import RandomIdentitySampler
 from .sampler_ddp import RandomIdentitySampler_DDP
 import torch.distributed as dist
 
-from utils.caption import load_captions
+# ✅ đổi import: load ra 2 map (by_img, by_pid)
+from utils.caption import load_caption_maps
 
 from .dukemtmcreid import DukeMTMCreID
 from .market1501 import Market1501
@@ -69,14 +70,29 @@ def make_dataloader(cfg):
     num_workers = cfg.DATALOADER.NUM_WORKERS
 
     dataset = __factory[cfg.DATASETS.NAMES](root=cfg.DATASETS.ROOT_DIR)
-    method = getattr(cfg.MODEL, "METHOD", "promptsg")
-    caption_dict = None
-    if method == "clip_scgi":
-        # CLIP-SCGI requires offline captions during training
-        caption_dict = load_captions(getattr(cfg.DATASETS, "CAPTION_FILE", ""))
 
-    train_set = ImageDataset(dataset.train, train_transforms, caption_dict=caption_dict)
+    # ✅ caption maps (by image filename, fallback by pid/label)
+    method = getattr(cfg.MODEL, "METHOD", "promptsg")
+    caption_by_img, caption_by_pid = None, None
+
+    if method == "clip_scgi":
+        cap_path = getattr(cfg.DATASETS, "CAPTION_FILE", "")
+        if not cap_path:
+            raise ValueError("MODEL.METHOD='clip_scgi' nhưng cfg.DATASETS.CAPTION_FILE đang rỗng.")
+        max_words = int(getattr(cfg.DATASETS, "CAPTION_MAX_WORDS", 45))
+        caption_by_img, caption_by_pid = load_caption_maps(cap_path, max_words=max_words)
+
+    # ✅ train_set: có caption khi clip_scgi
+    train_set = ImageDataset(
+        dataset.train,
+        train_transforms,
+        caption_by_img=caption_by_img,
+        caption_by_pid=caption_by_pid
+    )
+
+    # bình thường (không cần caption)
     train_set_normal = ImageDataset(dataset.train, val_transforms)
+
     num_classes = dataset.num_train_pids
     cam_num = dataset.num_train_cams
     view_num = dataset.num_train_vids
@@ -106,13 +122,17 @@ def make_dataloader(cfg):
     elif cfg.DATALOADER.SAMPLER == 'softmax':
         print('using softmax sampler')
         train_loader = DataLoader(
-            train_set, batch_size=cfg.SOLVER.PROMPTSG.IMS_PER_BATCH, shuffle=True, num_workers=num_workers,
+            train_set,
+            batch_size=cfg.SOLVER.PROMPTSG.IMS_PER_BATCH,
+            shuffle=True,
+            num_workers=num_workers,
             collate_fn=train_collate_fn
         )
     else:
-        print('unsupported sampler! expected softmax or triplet but got {}'.format(cfg.DATALOADER.SAMPLER))
-        
-    val_set = ImageDataset(dataset.query + dataset.gallery, val_transforms, caption_dict=None)
+        raise ValueError(f"unsupported sampler! expected softmax or triplet but got {cfg.DATALOADER.SAMPLER}")
+
+    # Val/query/gallery: không cần caption
+    val_set = ImageDataset(dataset.query + dataset.gallery, val_transforms, caption_by_img=None, caption_by_pid=None)
     val_loader = DataLoader(
         val_set,
         batch_size=cfg.TEST.IMS_PER_BATCH,
@@ -121,8 +141,7 @@ def make_dataloader(cfg):
         collate_fn=val_collate_fn,
     )
 
-    # Create separate loaders for query and gallery
-    query_set = ImageDataset(dataset.query, val_transforms, caption_dict=None)
+    query_set = ImageDataset(dataset.query, val_transforms, caption_by_img=None, caption_by_pid=None)
     query_loader = DataLoader(
         query_set,
         batch_size=cfg.TEST.IMS_PER_BATCH,
@@ -131,7 +150,7 @@ def make_dataloader(cfg):
         collate_fn=val_collate_fn,
     )
 
-    gallery_set = ImageDataset(dataset.gallery, val_transforms, caption_dict=None)
+    gallery_set = ImageDataset(dataset.gallery, val_transforms, caption_by_img=None, caption_by_pid=None)
     gallery_loader = DataLoader(
         gallery_set,
         batch_size=cfg.TEST.IMS_PER_BATCH,

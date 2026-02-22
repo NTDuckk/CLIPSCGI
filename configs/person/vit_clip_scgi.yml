@@ -1,0 +1,42 @@
+MODEL:
+  NAME: 'ViT-B-16'
+  METHOD: 'clip_scgi'
+  STRIDE_SIZE: [16, 16]
+  METRIC_LOSS_TYPE: 'triplet'
+  IF_LABELSMOOTH: 'on'
+  NO_MARGIN: False
+  CLIPSCGI:
+    USE_CAPTION: True
+    DROP_CGI_IN_INFER: True
+    TEMPERATURE: 0.07
+    LAMBDA_CON: 1.0
+    CGI_NUM_QUERIES: 2
+    CGI_HEADS: 8
+    CFF_HEADS: 8
+    CFF_POST_BLOCKS: 2
+    COATTN_TEXT_MODE: "full"
+    KV_MODE: "cls_patch"
+
+DATASETS:
+  NAMES: ('market1501')
+  ROOT_DIR: datasets/dataset
+  CAPTION_FILE: "market1501_bounding_box_train.json"   # <-- bạn tự tạo
+
+TEST:
+  IMS_PER_BATCH: 64
+  SKIP_MIM_GALLERY: False
+  NECK_FEAT: 'after'
+  FEAT_NORM: 'yes'
+
+SOLVER:
+  SEED: 1234
+  MARGIN: 0.3
+  PROMPTSG:
+    IMS_PER_BATCH: 64
+    OPTIMIZER_NAME: 'Adam'
+    MAX_EPOCHS: 60
+    BASE_LR_VISUAL: 0.000005
+    BASE_LR_NEW: 0.00005
+    WEIGHT_DECAY: 0.0001
+    STEPS: [20, 40]
+    GAMMA: 0.1

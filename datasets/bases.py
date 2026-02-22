@@ -68,17 +68,11 @@ class BaseImageDataset(BaseDataset):
 
 
 class ImageDataset(Dataset):
-    """Standard ReID image dataset with optional offline caption lookup (for CLIP-SCGI).
-
-    Each sample tuple in `dataset` is expected to be: (img_path, pid, camid, trackid).
-    Returns:
-        - Without captions: (img, pid, camid, trackid, filename)
-        - With captions:    (img, pid, camid, trackid, filename, caption_str)
-    """
-    def __init__(self, dataset, transform=None, caption_dict=None):
+    def __init__(self, dataset, transform=None, caption_by_img=None, caption_by_pid=None):
         self.dataset = dataset
         self.transform = transform
-        self.caption_dict = caption_dict  # dict[str->str] or None
+        self.caption_by_img = caption_by_img
+        self.caption_by_pid = caption_by_pid
 
     def __len__(self):
         return len(self.dataset)
@@ -97,13 +91,24 @@ class ImageDataset(Dataset):
     def __getitem__(self, index):
         img_path, pid, camid, trackid = self.dataset[index]
         img = read_image(img_path)
-
         if self.transform is not None:
             img = self.transform(img)
 
-        fname = img_path.split('/')[-1]
-        if self.caption_dict is None:
-            return img, pid, camid, trackid, fname
+        img_name = osp.basename(img_path)
 
-        caption = self._lookup_caption(img_path)
-        return img, pid, camid, trackid, fname, caption
+        # Không dùng caption -> giữ output cũ
+        if self.caption_by_img is None and self.caption_by_pid is None:
+            return img, pid, camid, trackid, img_name
+
+        # 1) Ưu tiên theo ảnh (SCGI đúng chuẩn)
+        cap = ""
+        if self.caption_by_img is not None:
+            cap = self.caption_by_img.get(img_name, "")
+            if not cap:
+                cap = self.caption_by_img.get(img_path, "")
+
+        # 2) Fallback theo label/pid nếu bạn muốn “tùy theo label”
+        if (not cap) and (self.caption_by_pid is not None):
+            cap = self.caption_by_pid.get(int(pid), "")
+
+        return img, pid, camid, trackid, img_name, cap
