@@ -28,9 +28,37 @@ def make_loss(cfg, num_classes):
     supcon_loss = SupConLoss(device)
     
     if sampler == 'softmax':
-        def loss_func(score, feat, target):
-            return F.cross_entropy(score, target)
+        def loss_func(score, feat, target, target_cam=None, image_feat=None, text_feat=None):
+            # ID loss
+            if cfg.MODEL.IF_LABELSMOOTH == 'on':
+                ID_LOSS = xent(score, target)
+            else:
+                ID_LOSS = F.cross_entropy(score, target)
 
+            TRI_LOSS = torch.tensor(0.0, device=ID_LOSS.device)
+            total = cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS
+
+            method = getattr(cfg.MODEL, 'METHOD', 'promptsg')
+            if method == 'clip_scgi':
+                CON_LOSS = torch.tensor(0.0, device=ID_LOSS.device)
+                if (image_feat is not None) and (text_feat is not None):
+                    temp = getattr(cfg.MODEL.CLIPSCGI, 'TEMPERATURE', 0.07)
+                    lam = getattr(cfg.MODEL.CLIPSCGI, 'LAMBDA_CON', 1.0)
+                    CON_LOSS = symmetric_clip_contrastive_loss(image_feat, text_feat, temperature=temp)
+                    total = total + lam * CON_LOSS
+                return total, {
+                    'id_loss': ID_LOSS.detach(),
+                    'tri_loss': TRI_LOSS.detach(),
+                    'con_loss': CON_LOSS.detach()
+                }
+
+            # PromptSG case (không dùng con_loss)
+            SUPCON_LOSS = torch.tensor(0.0, device=ID_LOSS.device)
+            return total, {
+                'id_loss': ID_LOSS.detach(),
+                'tri_loss': TRI_LOSS.detach(),
+                'supcon_loss': SUPCON_LOSS.detach()
+            }
     elif cfg.DATALOADER.SAMPLER == 'softmax_triplet':
         def loss_func(score, feat, target, target_cam, image_feat=None, text_feat=None):
             # ID Loss (giống CLIP-ReID)
