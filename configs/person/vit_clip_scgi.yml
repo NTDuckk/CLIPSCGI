@@ -20,7 +20,7 @@ MODEL:
 DATASETS:
   NAMES: ('market1501')
   ROOT_DIR: datasets/dataset
-  CAPTION_FILE: "market1501_bounding_box_train.json"   # <-- bạn tự tạo
+  CAPTION_FILE: "market1501_bounding_box_train.jsonl"  # <-- bạn tự tạo
 
 TEST:
   IMS_PER_BATCH: 64
