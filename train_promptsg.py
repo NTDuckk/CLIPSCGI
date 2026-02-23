@@ -36,6 +36,7 @@ if __name__ == '__main__':
         cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
+    os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID
 
     set_seed(cfg.SOLVER.SEED)
 
@@ -56,7 +57,6 @@ if __name__ == '__main__':
             logger.info('\n' + cf.read())
     logger.info('Running with config:\n{}'.format(cfg))
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID
 
     train_loader, val_loader, query_loader, gallery_loader, num_query, num_classes, cam_num, view_num = make_dataloader(cfg)
     
