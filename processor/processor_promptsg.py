@@ -345,22 +345,28 @@ def do_train(cfg, model, train_loader, val_loader, query_loader, gallery_loader,
             # ====== END ADDED ======
 
             # ---- meters/logging (FIXED) ----
+            # Detach losses for logging to avoid graph issues
             with torch.no_grad():
-                main_cls_score = cls_score[0] if isinstance(cls_score, (list, tuple)) else cls_score
-                acc = (main_cls_score.max(1)[1] == target).float().mean()
+                # cls_score is a list [cls_score, cls_score_proj]
+                if isinstance(cls_score, (list, tuple)):
+                    main_cls_score = cls_score[0]          # hoặc: cls_score[0] + cls_score[1] nếu muốn "combined"
+                else:
+                    main_cls_score = cls_score
 
-                loss_meter.update(float(total_loss.item()), img.shape[0])
-                id_meter.update(float(losses_dict['id_loss'].item()), img.shape[0])
-                tri_meter.update(float(losses_dict['tri_loss'].item()), img.shape[0])
+                acc = (main_cls_score.argmax(dim=1) == target).float().mean()
 
-                sup_or_con = losses_dict.get('supcon_loss', losses_dict.get('con_loss', torch.tensor(0.0)))
-                try:
-                    supcon_val = float(sup_or_con.item())
-                except Exception:
+                loss_meter.update(total_loss.item(), img.size(0))
+                id_meter.update(losses_dict['id_loss'].item(), img.size(0))
+                tri_meter.update(losses_dict['tri_loss'].item(), img.size(0))
+
+                sup_or_con = losses_dict.get('supcon_loss', losses_dict.get('con_loss', None))
+                if sup_or_con is None:
                     supcon_val = 0.0
+                else:
+                    supcon_val = float(sup_or_con.detach().item())
 
-                supcon_meter.update(supcon_val, img.shape[0])
-                acc_meter.update(float(acc.item()), img.shape[0])
+            supcon_meter.update(supcon_val, img.size(0))
+            acc_meter.update(float(acc.item()), img.size(0))
 
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
