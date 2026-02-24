@@ -1,4 +1,3 @@
-code này đã đúng theo model của paper chưa?
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
