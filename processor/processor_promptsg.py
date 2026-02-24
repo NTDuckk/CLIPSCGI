@@ -305,11 +305,11 @@ def do_train(cfg, model, train_loader, val_loader, query_loader, gallery_loader,
 
         for n_iter, batch in enumerate(train_loader):
             # PromptSG: (img, pid, camid, viewid)
-            # CLIP-SCGI: (img, pid, camid, viewid, captions)
-            if len(batch) == 5:
-                img, pid, camid, viewid, captions = batch
+            # CLIP-SCGI: (img, pid, camid, viewid, img_paths, captions)
+            if len(batch) == 6:
+                img, pid, camid, viewid, img_paths, captions = batch
             else:
-                img, pid, camid, viewid = batch
+                img, pid, camid, viewid, img_paths = batch
                 captions = None
 
             img = img.to(device, non_blocking=True)
@@ -324,7 +324,7 @@ def do_train(cfg, model, train_loader, val_loader, query_loader, gallery_loader,
             if use_cuda:
                 with torch.amp.autocast("cuda", enabled=True):
                     if method == "clip_scgi":
-                        cls_score, triplet_feats, image_feat, text_feat = model(x=img, label=target, caption=captions)
+                        cls_score, triplet_feats, image_feat, text_feat = model(x=img, label=target, caption=captions, img_paths=img_paths)
                     else:
                         cls_score, triplet_feats, image_feat, text_feat = model(x=img, label=target)
 
@@ -339,7 +339,7 @@ def do_train(cfg, model, train_loader, val_loader, query_loader, gallery_loader,
             else:
                 # CPU fallback
                 if method == "clip_scgi":
-                    cls_score, triplet_feats, image_feat, text_feat = model(x=img, label=target, caption=captions)
+                    cls_score, triplet_feats, image_feat, text_feat = model(x=img, label=target, caption=captions, img_paths=img_paths)
                 else:
                     cls_score, triplet_feats, image_feat, text_feat = model(x=img, label=target)
 

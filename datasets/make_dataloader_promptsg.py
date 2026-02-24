@@ -26,22 +26,24 @@ __factory = {
 
 def train_collate_fn(batch):
     if len(batch[0]) == 6:
-        imgs, pids, camids, viewids, _, caps = zip(*batch)
+        imgs, pids, camids, viewids, img_paths, caps = zip(*batch)
         caps = [c if c is not None else "" for c in caps]  # <= thêm dòng này
         return (
             torch.stack(imgs, dim=0),
             torch.tensor(pids, dtype=torch.int64),
             torch.tensor(camids, dtype=torch.int64),
             torch.tensor(viewids, dtype=torch.int64),
+            list(img_paths),
             list(caps),
         )
     else:
-        imgs, pids, camids, viewids, _ = zip(*batch)
+        imgs, pids, camids, viewids, img_paths = zip(*batch)
         return (
             torch.stack(imgs, dim=0),
             torch.tensor(pids, dtype=torch.int64),
             torch.tensor(camids, dtype=torch.int64),
             torch.tensor(viewids, dtype=torch.int64),
+            list(img_paths),
         )
 
 def val_collate_fn(batch):
@@ -154,4 +156,4 @@ def make_dataloader(cfg):
         collate_fn=val_collate_fn,
     )
 
-    return train_loader, val_loader, query_loader, gallery_loader, len(dataset.query), num_classes, cam_num, view_num
+    return train_loader, val_loader, query_loader, gallery_loader, len(dataset.query), num_classes, cam_num, view_num, len(caption_by_img) if caption_by_img else 0, len(caption_by_pid) if caption_by_pid else 0

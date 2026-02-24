@@ -58,7 +58,7 @@ if __name__ == '__main__':
     logger.info('Running with config:\n{}'.format(cfg))
 
 
-    train_loader, val_loader, query_loader, gallery_loader, num_query, num_classes, cam_num, view_num = make_dataloader(cfg)
+    train_loader, val_loader, query_loader, gallery_loader, num_query, num_classes, cam_num, view_num, num_captions_by_img, num_captions_by_pid = make_dataloader(cfg)
     
     # Create directory for dataloader logging
     dataloader_log_dir = os.path.join(output_dir, 'make_dataloader_train_logging')
@@ -74,6 +74,8 @@ if __name__ == '__main__':
     dataloader_logger.info(f'Num classes: {num_classes}')
     dataloader_logger.info(f'Camera num: {cam_num}')
     dataloader_logger.info(f'View num: {view_num}')
+    dataloader_logger.info(f'Num captions by img: {num_captions_by_img}')
+    dataloader_logger.info(f'Num captions by pid: {num_captions_by_pid}')
     dataloader_logger.info('======================')
     
     model = make_model(cfg, num_class=num_classes, camera_num=cam_num, view_num=view_num)

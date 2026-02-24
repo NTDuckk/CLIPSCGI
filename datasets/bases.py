@@ -87,21 +87,31 @@ class ImageDataset(Dataset):
         fname = osp.basename(img_path)
 
         caption = None
+        caption_source = None
         # ưu tiên caption_dict nếu có (để tương thích code cũ)
         if self.caption_dict is not None:
             caption = self.caption_dict.get(fname) or self.caption_dict.get(img_path)
+            if caption is not None:
+                caption_source = "caption_dict"
 
         if caption is None and self.caption_by_img is not None:
             caption = self.caption_by_img.get(fname) or self.caption_by_img.get(img_path)
+            if caption is not None:
+                caption_source = "caption_by_img"
 
         if caption is None and self.caption_by_pid is not None:
             caption = self.caption_by_pid.get(pid) or self.caption_by_pid.get(str(pid))
+            if caption is not None:
+                caption_source = "caption_by_pid"
+
+        print(f"Caption source: {caption_source}")
+        print(f"First line containing 'caption': def __init__(self, dataset, transform=None, caption_by_img=None, caption_by_pid=None, caption_dict=None):")
 
         has_caption_source = (self.caption_dict is not None) or (self.caption_by_img is not None) or (self.caption_by_pid is not None)
 
         if has_caption_source:
             if caption is None:
                 caption = ""   # đảm bảo luôn là str
-            return img, pid, camid, trackid, fname, caption
+            return img, pid, camid, trackid, img_path, caption
         else:
-            return img, pid, camid, trackid, fname
+            return img, pid, camid, trackid, img_path
