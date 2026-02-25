@@ -306,12 +306,8 @@ def do_train(cfg, model, train_loader, val_loader, query_loader, gallery_loader,
         for n_iter, batch in enumerate(train_loader):
             # PromptSG: (img, pid, camid, viewid)
             # CLIP-SCGI: (img, pid, camid, viewid, captions)
-            if len(batch) == 5:
-                img, pid, camid, viewid, captions = batch
-            else:
-                img, pid, camid, viewid = batch
-                captions = None
-
+            img, pid, camid, viewid, img_paths, *rest = batch
+            captions = rest[0] if len(rest) > 0 else None
             if n_iter == 0:
                 sample_pid = pid[0].item() if torch.is_tensor(pid) else pid[0]
                 sample_caption = captions[0] if captions else "No caption"
