@@ -422,6 +422,7 @@ def do_train(cfg, model, train_loader, val_loader, query_loader, gallery_loader,
                 )
                 logger.info(log_msg)
                 metrics_logger.info(log_msg)
+                print(log_msg, flush=True)
 
         # ---- epoch end ----
         end_time = time.time()
