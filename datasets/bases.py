@@ -104,9 +104,6 @@ class ImageDataset(Dataset):
             if caption is not None:
                 caption_source = "caption_by_pid"
 
-        print(f"Caption source: {caption_source}")
-        print(f"First line containing 'caption': def __init__(self, dataset, transform=None, caption_by_img=None, caption_by_pid=None, caption_dict=None):")
-
         has_caption_source = (self.caption_dict is not None) or (self.caption_by_img is not None) or (self.caption_by_pid is not None)
 
         if has_caption_source:

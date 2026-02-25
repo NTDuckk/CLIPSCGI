@@ -305,12 +305,17 @@ def do_train(cfg, model, train_loader, val_loader, query_loader, gallery_loader,
 
         for n_iter, batch in enumerate(train_loader):
             # PromptSG: (img, pid, camid, viewid)
-            # CLIP-SCGI: (img, pid, camid, viewid, img_paths, captions)
-            if len(batch) == 6:
-                img, pid, camid, viewid, img_paths, captions = batch
+            # CLIP-SCGI: (img, pid, camid, viewid, captions)
+            if len(batch) == 5:
+                img, pid, camid, viewid, captions = batch
             else:
-                img, pid, camid, viewid, img_paths = batch
+                img, pid, camid, viewid = batch
                 captions = None
+
+            if n_iter == 0:
+                sample_pid = pid[0].item() if torch.is_tensor(pid) else pid[0]
+                sample_caption = captions[0] if captions else "No caption"
+                logger.info(f"Epoch {epoch} Sample PID: {sample_pid}, Caption: {sample_caption}")
 
             img = img.to(device, non_blocking=True)
             target = pid.to(device, non_blocking=True)

@@ -79,6 +79,8 @@ def make_dataloader(cfg):
     caption_by_img, caption_by_pid = None, None
     if method == "clip_scgi":
         cap_file = getattr(cfg.DATASETS, "CAPTION_FILE", "")
+        if cap_file:
+            cap_file = os.path.join(cfg.DATASETS.ROOT_DIR, cap_file)
         caption_by_img, caption_by_pid = load_caption_maps(cap_file)  # (by_img, by_pid)
 
     train_set = ImageDataset(
