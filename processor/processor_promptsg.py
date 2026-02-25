@@ -310,8 +310,9 @@ def do_train(cfg, model, train_loader, val_loader, query_loader, gallery_loader,
             captions = rest[0] if len(rest) > 0 else None
             if n_iter == 0:
                 sample_pid = pid[0].item() if torch.is_tensor(pid) else pid[0]
+                sample_img_path = img_paths[0] if img_paths else "No path"
                 sample_caption = captions[0] if captions else "No caption"
-                logger.info(f"Epoch {epoch} Sample PID: {sample_pid}, Caption: {sample_caption}")
+                logger.info(f"Epoch {epoch} Sample PID: {sample_pid}, Image: {sample_img_path}, Caption: {sample_caption}")
 
             img = img.to(device, non_blocking=True)
             target = pid.to(device, non_blocking=True)
