@@ -20,7 +20,7 @@ MODEL:
 DATASETS:
   NAMES: ('market1501')
   ROOT_DIR: datasets/dataset
-  CAPTION_FILE: "../market1501_bounding_box_train.jsonl"  # path relative to ROOT_DIR
+  CAPTION_FILE: "market1501_bounding_box_train.jsonl"  # path relative to ROOT_DIR
 OUTPUT_DIR: "/kaggle/working/CLIPSCGI/logs/clipscgi_market_vit/"
 
 TEST:
