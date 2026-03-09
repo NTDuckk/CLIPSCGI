@@ -20,6 +20,11 @@ def main():
     ap.add_argument("--load_4bit", action="store_true")
     ap.add_argument("--max_new_tokens", type=int, default=128)
     ap.add_argument("--ext", nargs="+", default=[".jpg", ".jpeg", ".png", ".webp"])
+    ap.add_argument(
+        "--start_after",
+        default="",
+        help="Start captioning from the image after this relative filename, e.g. 0483_c2s3_075127_02.jpg",
+    )
     args = ap.parse_args()
 
     instruction = (
@@ -60,6 +65,22 @@ def main():
         if p.is_file() and p.suffix.lower() in exts:
             image_paths.append(p)
     image_paths.sort()
+
+    if args.start_after:
+        rel_list = [str(p.relative_to(data_root)) for p in image_paths]
+        try:
+            idx = rel_list.index(args.start_after)
+            image_paths = image_paths[idx + 1 :]
+            print(
+                f"[start_after] Found '{args.start_after}' at index={idx}. "
+                f"Start from next image. Remaining={len(image_paths)}"
+            )
+        except ValueError:
+            print(f"[start_after] ERROR: Cannot find '{args.start_after}' inside {data_root}")
+            print("A few nearby filenames:")
+            for name in rel_list[:10]:
+                print(" -", name)
+            return
 
     done = set()
     if out_path.exists():
